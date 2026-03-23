@@ -45,7 +45,7 @@ jobs:
             <packageSourceCredentials>
               <github>
                 <add key="Username" value="${{ github.actor }}" />
-                <add key="ClearTextPassword" value="${{ secrets.ReadPaquetesTOKEN }}" />
+                <add key="ClearTextPassword" value="${{ secrets.PaquetesTOKEN }}" />
               </github>
             </packageSourceCredentials>
           </configuration>
