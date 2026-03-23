@@ -1,14 +1,36 @@
 using Abstracciones.Interfaces.DA;
 using Abstracciones.Interfaces.Flujo;
-using Flujo;
+using Abstracciones.Interfaces.Reglas;
+using Abstracciones.Interfaces.Servicios;
+using Abstracciones.Modelos;
 using DA;
 using DA.Repositorios;
-using Abstracciones.Interfaces.Reglas;
+using Flujo;
 using Reglas;
-using Abstracciones.Interfaces.Servicios;
 using Servicios;
+using Microsoft.AspNetCore.Authentication.JwtBearer;  // ★
+using Microsoft.IdentityModel.Tokens;                 // ★
+using System.Text;                                    // ★
+using Autorizacion.Middleware;                        // ★
 
 var builder = WebApplication.CreateBuilder(args);
+// ★ Leer configuración JWT y registrar autenticación
+var tokenConfig = builder.Configuration.GetSection("Token").Get<TokenConfiguracion>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = tokenConfig.Issuer,
+            ValidAudience = tokenConfig.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                                           Encoding.UTF8.GetBytes(tokenConfig.key))
+        };
+    });
 
 // Add services to the container.
 
@@ -33,6 +55,26 @@ builder.Services.AddScoped<IRevisionReglas, RevisionReglas>();
 builder.Services.AddScoped<IConfiguracion, Configuracion>();
 
 
+// ★ Registrar servicios del paquete de Autorización
+builder.Services.AddTransient<Autorizacion.Abstracciones.Flujo.IAutorizacionFlujo,
+                               Autorizacion.Flujo.AutorizacionFlujo>();
+builder.Services.AddTransient<Autorizacion.Abstracciones.DA.ISeguridadDA,
+                               Autorizacion.DA.SeguridadDA>();
+builder.Services.AddTransient<Autorizacion.Abstracciones.DA.IRepositorioDapper,
+                               Autorizacion.DA.Repositorios.RepositorioDapper>();
+
+var politicaAcceso = "Politica de acceso";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: politicaAcceso,
+                      policy =>
+                      {
+                          policy.WithOrigins("https://localhost", "https://localhost:50427", "https://localhost:50428")
+                                .AllowAnyHeader()
+                                .AllowAnyMethod();
+                      });
+});
+
 
 var app = builder.Build();
 
@@ -44,7 +86,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors(politicaAcceso);
 
+app.AutorizacionClaims();  // ★ NUEVO — ANTES de UseAuthorization
 app.UseAuthorization();
 
 app.MapControllers();
